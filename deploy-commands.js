@@ -1,7 +1,7 @@
+require('dotenv').config();
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config.json');
 
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
@@ -13,14 +13,14 @@ for (const file of commandFiles) {
   commands.push(command.data.toJSON());
 }
 
-const rest = new REST({ version: '10' }).setToken(config.token);
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
     console.log('서버(길드) 단위 슬래시 명령어 등록 시작...');
 
     await rest.put(
-      Routes.applicationGuildCommands(config.clientId, config.guildId), // 서버 ID 넣어서 등록
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), // 서버 ID 넣어서 등록
       { body: commands }
     );
 

@@ -1,7 +1,7 @@
+require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config.json');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]  // 봇이 슬래시 커맨드 등을 처리하려면 이 인텐트는 필수
@@ -41,4 +41,4 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-client.login(config.token);
+client.login(process.env.DISCORD_TOKEN);
