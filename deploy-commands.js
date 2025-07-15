@@ -25,6 +25,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     );
 
     console.log('서버 슬래시 명령어 등록 완료!');
+    const registered = await rest.get(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
+    );
+    //console.log('🔍 현재 등록된 길드 명령어 목록:', JSON.stringify(registered, null, 2));
   } catch (error) {
     console.error(error);
   }
