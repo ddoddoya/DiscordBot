@@ -11,79 +11,92 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
+const VALID_DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+const VALID_TIME = (t) => t === '상관없음' || (Number.isInteger(Number(t)) && Number(t) >= 0 && Number(t) <= 26);
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('일정추가')
-    .setDescription('레이드 가능한 일정을 추가합니다')
+    .setDescription('요일별로 시간대를 한 번에 추가합니다')
     .addStringOption(option =>
-      option.setName('그룹이름').setDescription('예:7월 4주차면 7-4로 입력').setRequired(true))
+      option.setName('그룹이름').setDescription('ex)7월 4주차면 ->7-4').setRequired(true))
     .addStringOption(option =>
       option.setName('이름').setDescription('저장할 이름').setRequired(true))
     .addStringOption(option =>
-      option.setName('요일').setDescription('예: 월 or 월,화 or 다 될경우 상관없음 입력').setRequired(true))
-    .addStringOption(option =>
-      option.setName('시작시간').setDescription('숫자(0~24) 또는 상관없음').setRequired(true))
-    .addStringOption(option =>
-      option.setName('마감시간').setDescription('숫자(0~24) 또는 상관없음').setRequired(false)),
-
+      option.setName('요일별시간').setDescription('ex) 월,화=21~24,수,목=20~25,토,일=상관없음').setRequired(true)),
+  
   async execute(interaction) {
     const group = interaction.options.getString('그룹이름');
     const user = interaction.options.getString('이름');
-    const days = interaction.options.getString('요일').replace(/\s/g, '').split(',');
-    const start = interaction.options.getString('시작시간');
-    const endInput = interaction.options.getString('마감시간');
-    const validDays = ['월','화','수','목','금','토','일','상관없음'];
-    let end = endInput;
-    // 요일 유효성 검사
-    for (const day of days) {
-      if (!validDays.includes(day)) {
-        return interaction.reply({
-          content: `❌ 요일 입력 오류: "${day}"는 허용되지 않는 요일입니다. (월,화,수,목,금,토,일,상관없음 중에서 입력해주세요)`,
-          ephemeral: true
-        });
-      }
-    }
-    // 시작/마감시간 유효성 검사
-    if (start !== '상관없음' && !(Number.isInteger(Number(start)) && Number(start) >= 0 && Number(start) <= 24)) {
-      return interaction.reply({
-        content: `❌ 시작시간 입력 오류: "${start}"은 올바른 숫자가 아니에요! (0~24 또는 상관없음만 가능)`,
-        ephemeral: true
-      });
-    }
-    // 마감시간 체크
-    if (end && end !== '상관없음' && !(Number.isInteger(Number(end)) && Number(end) >= 0 && Number(end) <= 24)) {
-      return interaction.reply({
-        content: `❌ 마감시간 입력 오류: "${end}"은 올바른 숫자가 아니에요! (0~24 또는 상관없음만 가능)`,
-        ephemeral: true
-      });
-    }
-    
-    // 1. 시작시간이 '상관없음'이면 마감시간도 강제로 '상관없음' (둘 다 의미가 없음)
-    if (start === '상관없음') {
-      end = '상관없음';
-    }
-    // 2. 시작시간은 정상값, 마감시간만 비었으면 '상관없음'으로 처리 (사용자 실수 방지)
-    else if (!end || end === '') {
-      end = '상관없음';
-    }
+    const input = interaction.options.getString('요일별시간').replace(/\s/g, '');
 
-    // 여러 요일 입력: 각 요일마다 따로 저장(같은 그룹+유저+요일이면 update/덮어쓰기)
-    for (const day of days) {
-      // 이미 있는 일정은 삭제(덮어쓰기)
+    if (input === '상관없음') {
+    for (const day of VALID_DAYS) {
+      // 기존 row 삭제 (덮어쓰기)
       await pool.execute(
         "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
         [group, user, day]
       );
-      // 새로 저장
       await pool.execute(
         "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
-        [group, user, day, start, end]
+        [group, user, day, '상관없음', '상관없음']
       );
+    }
+    return interaction.reply({
+      content: `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n요일: 전체(상관없음)`,
+      
+    });
+  }
+
+    // 정규식: ([월화수목금토일,]+)=([^,=]+)
+    let regex = /([월화수목금토일,]+)=([^,=]+)/g;
+    let match;
+    const inserts = [];
+    let already = {};
+
+    // 정규식으로 모든 매치 반복
+    while ((match = regex.exec(input)) !== null) {
+      const days = match[1].split(',').map(d => d.trim()).filter(Boolean);
+      let [start, end] = match[2].split('~').map(v => v.trim());
+      if (!end) end = start;
+
+      // 유효성 검사
+      for (const day of days) {
+        if (!VALID_DAYS.includes(day)) {
+          return interaction.reply({content: `❌ 요일 오류: "${day}"는 허용되지 않는 요일입니다. (월~일or 상관없음만 가능)`, ephemeral: true});
+        }
+        if (!VALID_TIME(start) || !VALID_TIME(end)) {
+          return interaction.reply({content: `❌ 시간 오류: "${start}~${end}"은 올바른 입력이 아닙니다. (숫자 0~26 또는 상관없음)`, ephemeral: true});
+        }
+        // 중복 방지(같은 요일 중복 지정 막기)
+        if (already[day]) {
+          return interaction.reply({content: `❌ "${day}" 요일이 중복 지정됐어요. 한 번씩만 입력해주세요.`, ephemeral: true});
+        }
+        already[day] = true;
+      }
+
+      for (const day of days) {
+        // 기존 row 삭제 (덮어쓰기)
+        await pool.execute(
+          "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
+          [group, user, day]
+        );
+        // 새로 삽입
+        await pool.execute(
+          "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
+          [group, user, day, start, end]
+        );
+        inserts.push(`${day}: ${start}~${end}`);
+      }
+    }
+
+    if (inserts.length === 0) {
+      return interaction.reply({content: `❌ 입력에서 요일/시간을 찾지 못했어요! 예시를 참고해서 작성해주세요.`, ephemeral: true});
     }
 
     return interaction.reply({
-      content: `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n요일: ${days.join(', ')}\n시간: ${start} ~ ${end}`,
-      ephemeral: true
+      content: `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n${inserts.join('\n')}`,
+      
     });
   }
 };
