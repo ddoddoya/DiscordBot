@@ -27,7 +27,7 @@ module.exports = {
       option.setName('마감시간').setDescription('숫자(0~24) 또는 상관없음').setRequired(false)),
 
   async execute(interaction) {
-    const group = interaction.options.getString('일정이름');
+    const group = interaction.options.getString('그룹이름');
     const user = interaction.options.getString('이름');
     const days = interaction.options.getString('요일').replace(/\s/g, '').split(',');
     const start = interaction.options.getString('시작시간');

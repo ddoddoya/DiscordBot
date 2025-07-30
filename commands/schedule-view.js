@@ -23,7 +23,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const group = interaction.options.getString('일정이름');
+    const group = interaction.options.getString('그룹이름');
     const [rows] = await pool.execute(
       "SELECT * FROM schedules WHERE group_name = ?",
       [group]
@@ -44,14 +44,13 @@ module.exports = {
     if (day === '상관없음') {
         for (const d of days) for (const h of hours) table[d][h].push(sch.user_name);
     } else {
-        if (sch.start === '상관없음' || sch.end === '상관없음') {
-        for (const h of hours) table[day][h].push(sch.user_name);
-        } else {
-        for (let h = Number(sch.start); h <= Number(sch.end); h++) {
+        // 나머지는 시작~마감 (마감이 상관없음이면 24시까지)
+        const startHour = sch.start === '상관없음' ? 12 : Number(sch.start);
+        const endHour = sch.end === '상관없음' ? 24 : Number(sch.end);
+        for (let h = startHour; h <= endHour; h++) {
             if (hours.includes(h)) table[day][h].push(sch.user_name);
         }
         }
-    }
     });
     function makeTableImage(table, days, hours) {
     const NAMES_PER_ROW = 2; // 한 줄에 몇 명씩 쓸지
