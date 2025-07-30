@@ -33,7 +33,7 @@ module.exports = {
 
     // 시간표 (12~24시, 월~일) 텍스트 표로 구성
     const hours = Array.from({length: 15}, (_, i) => i + 12)//12~24시
-    const days = ['월','화','수','목','금','토','일'];
+    const days = ['수','목','금','토','일','월','화'];
     const table = {};
     for (const d of days) table[d] = {};
     for (const d of days) for (const h of hours) table[d][h] = [];

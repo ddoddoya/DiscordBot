@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { SlashCommandBuilder } = require('discord.js');
-const mysql = require('mysql2/promise');
+ 
 
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST,
