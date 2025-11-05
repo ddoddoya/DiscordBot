@@ -24,79 +24,87 @@ module.exports = {
       option.setName('이름').setDescription('저장할 이름').setRequired(true))
     .addStringOption(option =>
       option.setName('요일별시간').setDescription('ex) 월,화=21~24,수,목=20~25,토,일=상관없음').setRequired(true)),
-  
+
   async execute(interaction) {
     const group = interaction.options.getString('그룹이름');
     const user = interaction.options.getString('이름');
     const input = interaction.options.getString('요일별시간').replace(/\s/g, '');
+    let message = '';
+    let errorMessage = '';
 
-    if (input === '상관없음') {
-    for (const day of VALID_DAYS) {
-      // 기존 row 삭제 (덮어쓰기)
-      await pool.execute(
-        "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
-        [group, user, day]
-      );
-      await pool.execute(
-        "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
-        [group, user, day, '상관없음', '상관없음']
-      );
-    }
-    return interaction.reply({
-      content: `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n요일: 전체(상관없음)`,
-      
-    });
-  }
-
-    // 정규식: ([월화수목금토일,]+)=([^,=]+)
-    let regex = /([월화수목금토일,]+)=([^,=]+)/g;
-    let match;
-    const inserts = [];
-    let already = {};
-
-    // 정규식으로 모든 매치 반복
-    while ((match = regex.exec(input)) !== null) {
-      const days = match[1].split(',').map(d => d.trim()).filter(Boolean);
-      let [start, end] = match[2].split('~').map(v => v.trim());
-      if (!end) end = start;
-
-      // 유효성 검사
-      for (const day of days) {
-        if (!VALID_DAYS.includes(day)) {
-          return interaction.reply({content: `❌ 요일 오류: "${day}"는 허용되지 않는 요일입니다. (월~일or 상관없음만 가능)`, ephemeral: true});
+    try {
+      if (input === '상관없음') {
+        for (const day of VALID_DAYS) {
+          await pool.execute(
+            "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
+            [group, user, day]
+          );
+          await pool.execute(
+            "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
+            [group, user, day, '상관없음', '상관없음']
+          );
         }
-        if (!VALID_TIME(start) || !VALID_TIME(end)) {
-          return interaction.reply({content: `❌ 시간 오류: "${start}~${end}"은 올바른 입력이 아닙니다. (숫자 0~26 또는 상관없음)`, ephemeral: true});
+        message = `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n요일: 전체(상관없음)`;
+      } else {
+        const regex = /([월화수목금토일,]+)=([^,=]+)/g;
+        const inserts = [];
+        const already = {};
+        let match;
+
+        while ((match = regex.exec(input)) !== null) {
+          const days = match[1].split(',').map(d => d.trim()).filter(Boolean);
+          let [start, end] = match[2].split('~').map(v => v.trim());
+          if (!end) end = start;
+
+          for (const day of days) {
+            if (!VALID_DAYS.includes(day)) {
+              errorMessage = `❌ 요일 오류: "${day}"는 허용되지 않는 요일입니다. (월~일 or 상관없음만 가능)`;
+              break;
+            }
+            if (!VALID_TIME(start) || !VALID_TIME(end)) {
+              errorMessage = `❌ 시간 오류: "${start}~${end}"은 올바른 입력이 아닙니다. (숫자 0~26 또는 상관없음)`;
+              break;
+            }
+            if (already[day]) {
+              errorMessage = `❌ "${day}" 요일이 중복 지정됐어요. 한 번씩만 입력해주세요.`;
+              break;
+            }
+            already[day] = true;
+          }
+
+          if (errorMessage) break; // 에러 발생 시 루프 중단
+
+          for (const day of days) {
+            await pool.execute(
+              "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
+              [group, user, day]
+            );
+            await pool.execute(
+              "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
+              [group, user, day, start, end]
+            );
+            inserts.push(`${day}: ${start}~${end}`);
+          }
         }
-        // 중복 방지(같은 요일 중복 지정 막기)
-        if (already[day]) {
-          return interaction.reply({content: `❌ "${day}" 요일이 중복 지정됐어요. 한 번씩만 입력해주세요.`, ephemeral: true});
+
+        if (!errorMessage && inserts.length === 0) {
+          errorMessage = `❌ 입력에서 요일/시간을 찾지 못했어요! 예시를 참고해서 작성해주세요.`;
         }
-        already[day] = true;
+
+        if (!errorMessage) {
+          message = `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n${inserts.join('\n')}`;
+        }
       }
 
-      for (const day of days) {
-        // 기존 row 삭제 (덮어쓰기)
-        await pool.execute(
-          "DELETE FROM schedules WHERE group_name = ? AND user_name = ? AND day = ?",
-          [group, user, day]
-        );
-        // 새로 삽입
-        await pool.execute(
-          "INSERT INTO schedules (group_name, user_name, day, start, end) VALUES (?, ?, ?, ?, ?)",
-          [group, user, day, start, end]
-        );
-        inserts.push(`${day}: ${start}~${end}`);
+      // reply는 딱 한 번만
+      if (errorMessage) {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      } else {
+        await interaction.reply({ content: message });
       }
+    } catch (err) {
+      console.error('명령어 실행 오류:', err);
+      await interaction.reply({ content: '❌ 일정 추가 중 오류가 발생했습니다.', ephemeral: true });
     }
-
-    if (inserts.length === 0) {
-      return interaction.reply({content: `❌ 입력에서 요일/시간을 찾지 못했어요! 예시를 참고해서 작성해주세요.`, ephemeral: true});
-    }
-
-    return interaction.reply({
-      content: `✅ ${group} 그룹에 일정이 추가됨!\n이름: ${user}\n${inserts.join('\n')}`,
-      
-    });
   }
 };
