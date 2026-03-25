@@ -5,7 +5,7 @@ require('dotenv').config();
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('보석')
-    .setDescription('여러 보석 아이템의 최저 즉시 구매가를 알려줍니다'),
+    .setDescription('보석 아이템의 최저 즉시 구매가를 알려줍니다'),
 
   async execute(interaction) {
     await interaction.deferReply();

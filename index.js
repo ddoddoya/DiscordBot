@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { startLostArkGoldNotifier } = require('./modules/lostarkNotifier');
+const { startAuctionSniper } = require('./modules/auctionSniper'); 
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -21,6 +22,7 @@ for (const file of commandFiles) {
 client.once('ready', () => {
   console.log(`${client.user.tag} 봇이 온라인입니다!`);
   startLostArkGoldNotifier(client);
+  startAuctionSniper(client); 
 });
 
 client.on('interactionCreate', async interaction => {

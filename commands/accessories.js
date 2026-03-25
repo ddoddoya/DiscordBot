@@ -25,7 +25,7 @@ async function fetchEtcValues(apiBase, token, parentValue, subValue) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('악세')
+    .setName('악세검색')
     .setDescription('목걸이/귀걸이/반지 선택 후 시세 검색')
     .addStringOption(opt =>
       opt.setName('종류')
