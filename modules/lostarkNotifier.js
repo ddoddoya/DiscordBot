@@ -52,7 +52,7 @@ function getTodayGoldIslands(calendar) {
 // 스케줄러 실행
 function startLostArkGoldNotifier(client) {
   cron.schedule(
-    "2 20 * * *",
+    "30 18 * * *",
     async () => {
       try {
         const api = axios.create({

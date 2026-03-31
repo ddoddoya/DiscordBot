@@ -50,7 +50,7 @@ function startAuctionSniper(client) {
                             notifiedKeys.push(itemKey);
                             isUpdated = true;
 
-                            const channel = await client.channels.fetch(alert.channel_id);
+                            const channel = await client.channels.fetch(process.env.CHANNEL_ID2);
                             
                             const upgrades = (item.Options || [])
                                 .filter(opt => opt.Type === 'ACCESSORY_UPGRADE')
